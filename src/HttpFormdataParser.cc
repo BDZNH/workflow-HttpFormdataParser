@@ -108,8 +108,6 @@ bool HttpFormdataParser::parse_boundary(std::string &content_type)
     this->boundary = content_type.substr(real_boundary_index, content_type.size());
     boundary = "--" + boundary;
 
-    printf("boundary: %s\n", boundary.c_str());
-
     generate_kmp_next_array();
     return true;
 }
@@ -165,13 +163,13 @@ bool HttpFormdataParser::at_body_end()
     return (offset + boundary.size() + 2) >= body_size;
 }
 
+// 这里就是整个 formdata parser 的核心了，从 body 里面找到所有的 boundary ，分成一个一个的 part
+// 找到 name 字段 filename 字段(有的话) 以及这个 part 的内容
 void HttpFormdataParser::parse_part(const void *data)
 {
-    bool isfile = false;
     part_start = find_next_boundary((const char *)data, offset);
     if (part_start == NOT_FOUND)
     {
-        printf("can't find boundary, maybe at the end of the body\n");
         offset = body_size;
         return;
     }
@@ -181,13 +179,10 @@ void HttpFormdataParser::parse_part(const void *data)
     if (part_end == NOT_FOUND)
     {
         offset = body_size;
-        printf("can't find boundary 2, maybe at the end of the body\n");
         return;
     }
 
     part_len = part_end - part_start;
-
-    printf("partstart %ld partend: %ld partlen: %ld\n", part_start, part_end, part_len);
 
     HttpFormdata tmpdata;
 
@@ -197,7 +192,6 @@ void HttpFormdataParser::parse_part(const void *data)
     size_t name_end = find((const char *)data, body_size, "\"", name_start, part_len - (name_start - part_start));
     tmpdata.name = (const char *)data + name_start;
     tmpdata.name_len = name_end - name_start;
-    printf("name=\"%.*s\" nameaddr=%p\n", (int)tmpdata.name_len, tmpdata.name, tmpdata.name);
 
     //如果是一个文件
     size_t filename_start = find((const char *)data, body_size, "filename=\"", part_start, part_len);
@@ -207,11 +201,6 @@ void HttpFormdataParser::parse_part(const void *data)
         name_end = find((const char *)data, body_size, "\"", filename_start, part_len - (filename_start - part_start));
         tmpdata.file_name = (const char *)data + filename_start;
         tmpdata.file_name_len = name_end - filename_start;
-        printf("filename offset %ld\n", filename_start);
-        printf("filename len %ld\n", name_end - filename_start);
-        printf("received a file: \"%.*s\"\n",(int)tmpdata.file_name_len,tmpdata.file_name);
-
-        isfile = true;
     }
 
     // 从当前位置找到连续两个 \r\n ，也就是内容开始的地方
@@ -222,15 +211,9 @@ void HttpFormdataParser::parse_part(const void *data)
     tmpdata.value = (const char *)data + name_start;
     tmpdata.value_len = name_end - name_start;
 
-    if(!isfile)
-    {
-        printf("value: \"%.*s\"\n",(int)tmpdata.value_len,tmpdata.value);
-    }
-
     this->formdata.push_back(std::move(tmpdata));
     offset = part_end;
     part_len = 0;
-    printf("offset %ld: %.*s\n",offset,(int)boundary.size()+2,(char*)data);
 }
 
 size_t HttpFormdataParser::find_next_line(const char *data, size_t _offset, size_t len)
@@ -345,6 +328,19 @@ bool HttpFormdataCursor::get_content(const std::string &name, const void **data,
         }
         delete[] buffer;
     }
+    return false;
+}
+
+bool HttpFormdataCursor::get_string(const std::string &name, std::string &value)
+{
+    const void *data;
+    size_t size;
+    if(this->get_content(name,&data,&size))
+    {
+        value = std::string((char *)data,size);
+        return true;
+    }
+    value = "";
     return false;
 }
 
