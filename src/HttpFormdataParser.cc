@@ -203,10 +203,10 @@ void HttpFormdataParser::parse_part(const void *data)
         tmpdata.file_name_len = name_end - filename_start;
     }
 
-    // 从当前位置找到连续两个 \r\n ，也就是内容开始的地方
+    // 从当前位置找到连续两个 \r\n ，也就是这个part的内容开始的地方
     name_start = find((char*)data,body_size,"\r\n\r\n",name_start,part_len-(name_start - part_start));
     name_start += 4; // 
-    name_end = part_end - 2;// boundary 减去一个 "/r/n"
+    name_end = part_end - 2;// part_end 减去一个 \r\n 一共两字节，也就是这个 part 内容结束的地方
 
     tmpdata.value = (const char *)data + name_start;
     tmpdata.value_len = name_end - name_start;
@@ -272,11 +272,7 @@ bool HttpFormdataCursor::next(std::string &name)
         return false;
     }
     const HttpFormdata &part = get(index);
-    char *buffer = new char[part.name_len + 1];
-    memset(buffer, 0, part.name_len + 1);
-    memcpy(buffer, part.name, part.name_len);
-    name = buffer;
-    delete[] buffer;
+    name = std::string(part.name,part.name_len);
     index++;
     return true;
 }
@@ -287,20 +283,16 @@ bool HttpFormdataCursor::is_file(const std::string &name, std::string &file_name
     for (size_t i = 0; i < size; i++)
     {
         const HttpFormdata &part = get(i);
-        char *buffer = new char[part.name_len + 1];
-        memset(buffer, 0, part.name_len + 1);
-        memcpy(buffer, part.name, part.name_len);
-        if (name == std::string(buffer) && part.file_name != nullptr)
+        if(name.size() != part.name_len)
         {
-            char *namebuffer = new char[part.file_name_len + 1];
-            memset(namebuffer, 0, part.file_name_len + 1);
-            memcpy(namebuffer, part.file_name, part.file_name_len);
-            file_name = namebuffer;
-            delete[] namebuffer;
-            delete[] buffer;
+            continue;
+        }
+        else if ((strncmp(part.name,name.c_str(),part.name_len) == 0) 
+                    && part.file_name != nullptr)
+        {
+            file_name = std::string(part.file_name,part.file_name_len);
             return true;
         }
-        delete[] buffer;
     }
     return false;
 }
@@ -316,17 +308,17 @@ bool HttpFormdataCursor::get_content(const std::string &name, const void **data,
     for (size_t i = 0; i < len; i++)
     {
         const HttpFormdata &part = get(i);
-        char *buffer = new char[part.name_len + 1];
-        memset(buffer, 0, part.name_len + 1);
-        memcpy(buffer, part.name, part.name_len);
-        if (name == std::string(buffer) && part.value != nullptr)
+        if(name.size() != part.name_len)
+        {
+            continue;
+        }
+        else if ((strncmp(part.name,name.c_str(),part.name_len) == 0) 
+                    && part.value != nullptr)
         {
             *data = part.value;
             *size = part.value_len;
-            delete[] buffer;
             return true;
         }
-        delete[] buffer;
     }
     return false;
 }
@@ -340,7 +332,6 @@ bool HttpFormdataCursor::get_string(const std::string &name, std::string &value)
         value = std::string((char *)data,size);
         return true;
     }
-    value = "";
     return false;
 }
 
