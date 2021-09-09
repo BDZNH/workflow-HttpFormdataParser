@@ -30,6 +30,7 @@
 #include "workflow/WFTaskFactory.h"
 #include "workflow/Workflow.h"
 #include "workflow/WFFacilities.h"
+#include "workflow/HttpUtil.h"
 #include "HttpFormdataParser.h"
 
 using namespace protocol;
@@ -131,8 +132,8 @@ void process_post(WFHttpTask *server_task, const char *root)
                 size_t datasize;
                 if (cursor.get_content(name, &data, &datasize))
                 {
-					filepath += filename;
-                    printf("received file \"%s\" with %ld bytes\n", filepath.c_str(), datasize);
+                    filepath += filename;
+                    printf("received file \"%s\" with %zu bytes\n", filepath.c_str(), datasize);
                     WFFileIOTask *pwrite_task;
                     pwrite_task = WFTaskFactory::create_pwrite_task(filepath, data, datasize, 0, pwrite_callback);
                     pwrite_task->user_data = server_task->get_resp();
@@ -148,7 +149,7 @@ void process_post(WFHttpTask *server_task, const char *root)
     else
     {
         server_task->get_resp()->set_status_code("503");
-        server_task->get_resp()->append_output_body("<html>503 Internal Server Error.</html>");
+        server_task->get_resp()->append_output_body("<html>503 Internal Server Error.</html>\r\n");
     }
 }
 
